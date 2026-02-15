@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import AchievementDisplay from '@/components/AchievementDisplay'
+import Providers from '@/components/Providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,9 +20,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ServiceWorkerRegistration />
-        <AchievementDisplay />
-        {children}
+        <Providers>
+          <ServiceWorkerRegistration />
+          <AchievementDisplay />
+          {children}
+        </Providers>
       </body>
     </html>
   )
