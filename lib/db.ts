@@ -43,6 +43,7 @@ interface DailyPuzzleDB extends DBSchema {
   streak: {
     key: string; // 'current'
     value: {
+      key: string;
       currentStreak: number;
       longestStreak: number;
       lastPlayedDate: string;
@@ -52,6 +53,7 @@ interface DailyPuzzleDB extends DBSchema {
   user: {
     key: string; // 'profile'
     value: {
+      key: string;
       id?: string;
       email?: string;
       name?: string;
@@ -76,8 +78,7 @@ export async function initDB(): Promise<IDBPDatabase<DailyPuzzleDB>> {
 
       // Scores store
       if (!db.objectStoreNames.contains('scores')) {
-        const scoresStore = db.createObjectStore('scores', { keyPath: 'date' });
-        scoresStore.createIndex('synced', 'synced');
+        db.createObjectStore('scores', { keyPath: 'date' });
       }
 
       // Activity store (for heatmap)
@@ -164,8 +165,8 @@ export async function getScore(date: string) {
 
 export async function getUnsyncedScores() {
   const db = await initDB();
-  const allScores = await db.getAllFromIndex('scores', 'synced', false);
-  return allScores;
+  const allScores = await db.getAll('scores');
+  return allScores.filter(score => !score.synced);
 }
 
 export async function markScoreSynced(date: string) {
