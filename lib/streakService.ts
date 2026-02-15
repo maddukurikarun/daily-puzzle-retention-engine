@@ -1,6 +1,6 @@
 // MODULE 2 & 4: Streak Calculator and Sync Service
 
-import { format, parseISO, differenceInDays, subDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import * as db from './db';
 
 export interface StreakData {
@@ -13,12 +13,17 @@ export function formatDate(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
+function parseDateOnly(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+}
+
 export function isConsecutiveDay(lastDate: string, currentDate: string): boolean {
   if (!lastDate) return true;
-  
-  const last = parseISO(lastDate);
-  const current = parseISO(currentDate);
-  const diff = differenceInDays(current, last);
+
+  const last = parseDateOnly(lastDate);
+  const current = parseDateOnly(currentDate);
+  const diff = Math.floor((current.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
   
   return diff === 0 || diff === 1;
 }
@@ -85,6 +90,7 @@ export async function syncScores(userId: string) {
           completionTime: score.completionTime,
           hintsUsed: score.hintsUsed,
           puzzleType: score.puzzleType,
+          difficulty: score.difficulty,
         }),
       });
 
@@ -100,22 +106,59 @@ export async function syncScores(userId: string) {
   }
 }
 
+export async function syncServerScoresToLocal(userId: string) {
+  try {
+    const response = await fetch(`/api/sync/daily-scores?userId=${encodeURIComponent(userId)}`);
+    if (!response.ok) {
+      return { success: false, merged: 0 };
+    }
+
+    const data = await response.json();
+    const scores = Array.isArray(data?.scores) ? data.scores : [];
+
+    for (const score of scores) {
+      await db.saveScore(
+        score.date,
+        score.score,
+        score.completionTime,
+        score.hintsUsed || 0,
+        score.puzzleType,
+        score.difficulty || 'medium'
+      );
+      await db.markScoreSynced(score.date);
+      await db.upsertActivityFromSync(
+        score.date,
+        true,
+        score.score,
+        score.difficulty || 'medium'
+      );
+    }
+
+    return { success: true, merged: scores.length };
+  } catch {
+    return { success: false, merged: 0 };
+  }
+}
+
 // Background sync when online
 export function setupBackgroundSync() {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('online', async () => {
-    console.log('Back online - syncing...');
     const user = await db.getUser();
     if (user && user.id) {
       await syncScores(user.id);
+      await syncServerScoresToLocal(user.id);
     }
   });
 }
 
-// Generate 365 days of activity data for heatmap
+// Generate 365/366 days of activity data for heatmap (handles leap years)
 export async function generateHeatmapData(endDate: Date = new Date()) {
-  const startDate = subDays(endDate, 364);
+  const year = endDate.getFullYear();
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  const daysToShow = isLeapYear ? 365 : 364;
+  const startDate = subDays(endDate, daysToShow);
   const activities = await db.getAllActivity();
   
   const activityMap = new Map(

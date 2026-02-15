@@ -6,10 +6,16 @@ import { Clock } from 'lucide-react';
 interface TimerProps {
   isActive: boolean;
   onTimeUpdate?: (seconds: number) => void;
+  initialSeconds?: number;
 }
 
-export default function Timer({ isActive, onTimeUpdate }: TimerProps) {
-  const [seconds, setSeconds] = useState(0);
+export default function Timer({ isActive, onTimeUpdate, initialSeconds = 0 }: TimerProps) {
+  const [seconds, setSeconds] = useState(initialSeconds);
+
+  useEffect(() => {
+    setSeconds(initialSeconds);
+    onTimeUpdate?.(initialSeconds);
+  }, [initialSeconds, onTimeUpdate]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;

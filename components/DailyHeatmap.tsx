@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { format, startOfWeek, addDays } from 'date-fns';
 
 interface HeatmapData {
   date: string;
@@ -17,14 +16,12 @@ interface DailyHeatmapProps {
 }
 
 export default function DailyHeatmap({ data }: DailyHeatmapProps) {
+  const today = new Date().toISOString().split('T')[0];
+
   // Group data by weeks
   const weeks: HeatmapData[][] = [];
   let currentWeek: HeatmapData[] = [];
   
-  // Start from the first Sunday
-  let firstDate = new Date(data[0]?.date || new Date());
-  const startSunday = startOfWeek(firstDate, { weekStartsOn: 0 });
-
   // Fill initial empty days if needed
   const firstDateObj = new Date(data[0]?.date || new Date());
   const daysFromSunday = (firstDateObj.getDay() + 7) % 7;
@@ -83,7 +80,7 @@ export default function DailyHeatmap({ data }: DailyHeatmapProps) {
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">365-Day Activity</h2>
       
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto pb-2">
         <div className="inline-block min-w-full">
           {/* Day labels */}
           <div className="flex mb-2">
@@ -104,11 +101,15 @@ export default function DailyHeatmap({ data }: DailyHeatmapProps) {
                 {week.map((day, dayIndex) => (
                   <motion.div
                     key={`${weekIndex}-${dayIndex}`}
+                    initial={{ scale: day.level > 0 ? 0.9 : 1, opacity: day.level > 0 ? 0.85 : 1 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.2, delay: day.level > 0 ? 0.02 : 0 }}
                     whileHover={{ scale: day.level >= 0 ? 1.2 : 1 }}
                     className={`
                       w-3 h-3 rounded-sm cursor-pointer transition-colors
                       ${getLevelColor(day.level)}
                       ${day.level >= 0 ? 'border border-gray-200' : ''}
+                      ${day.date === today ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
                     `}
                     onMouseEnter={(e) => handleMouseEnter(day, e)}
                     onMouseLeave={handleMouseLeave}
@@ -133,7 +134,7 @@ export default function DailyHeatmap({ data }: DailyHeatmapProps) {
       </div>
 
       {/* Tooltip */}
-      {hoveredCell && hoveredCell.level > 0 && (
+      {hoveredCell && hoveredCell.level >= 0 && hoveredCell.date && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -144,8 +145,12 @@ export default function DailyHeatmap({ data }: DailyHeatmapProps) {
           }}
         >
           <div className="font-semibold">{hoveredCell.date}</div>
-          <div>Score: {hoveredCell.score}</div>
-          <div className="capitalize">Difficulty: {hoveredCell.difficulty}</div>
+          <div>
+            {hoveredCell.level === 0 ? 'Not played' : `Score: ${hoveredCell.score}`}
+          </div>
+          {hoveredCell.level > 0 && (
+            <div className="capitalize">Difficulty: {hoveredCell.difficulty}</div>
+          )}
         </motion.div>
       )}
     </div>

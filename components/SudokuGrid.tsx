@@ -51,9 +51,9 @@ export default function SudokuGrid({ grid, onCellChange, disabled, errors }: Sud
   };
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-4 w-full">
       {/* Grid */}
-      <div className="bg-white p-4 rounded-lg shadow-lg">
+      <div className="bg-white p-2 sm:p-4 rounded-lg shadow-lg overflow-x-auto">
         <div className="grid gap-0 border-2 border-gray-800">
           {grid.map((row, rowIndex) => (
             <div key={rowIndex} className="flex">
@@ -69,7 +69,7 @@ export default function SudokuGrid({ grid, onCellChange, disabled, errors }: Sud
                     onClick={() => handleCellClick(rowIndex, colIndex)}
                     disabled={disabled || isClue}
                     className={`
-                      w-12 h-12 flex items-center justify-center text-lg font-semibold
+                      w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-base sm:text-lg font-semibold
                       border border-gray-300 transition-colors
                       ${isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
                       ${isClue ? 'bg-gray-100 text-gray-900 font-bold' : 'bg-white text-blue-600'}

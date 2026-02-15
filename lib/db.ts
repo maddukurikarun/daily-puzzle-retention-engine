@@ -14,6 +14,7 @@ interface DailyPuzzleDB extends DBSchema {
       score?: number;
       completionTime?: number;
       hintsUsed?: number;
+      hasStarted?: boolean;
       updatedAt: number;
     };
   };
@@ -38,6 +39,14 @@ interface DailyPuzzleDB extends DBSchema {
       score: number;
       difficulty: string;
       synced: boolean;
+    };
+  };
+  achievements: {
+    key: string;
+    value: {
+      key: string;
+      unlockedAt: number;
+      metadata?: Record<string, unknown>;
     };
   };
   streak: {
@@ -69,7 +78,7 @@ let dbInstance: IDBPDatabase<DailyPuzzleDB> | null = null;
 export async function initDB(): Promise<IDBPDatabase<DailyPuzzleDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<DailyPuzzleDB>('daily-puzzle-db', 1, {
+  dbInstance = await openDB<DailyPuzzleDB>('daily-puzzle-db', 2, {
     upgrade(db) {
       // Puzzles store
       if (!db.objectStoreNames.contains('puzzles')) {
@@ -84,6 +93,11 @@ export async function initDB(): Promise<IDBPDatabase<DailyPuzzleDB>> {
       // Activity store (for heatmap)
       if (!db.objectStoreNames.contains('activity')) {
         db.createObjectStore('activity', { keyPath: 'date' });
+      }
+
+      // Achievements store
+      if (!db.objectStoreNames.contains('achievements')) {
+        db.createObjectStore('achievements', { keyPath: 'key' });
       }
 
       // Streak store
@@ -102,13 +116,22 @@ export async function initDB(): Promise<IDBPDatabase<DailyPuzzleDB>> {
 }
 
 // Puzzle Progress Management
-export async function savePuzzleProgress(date: string, puzzleData: any, progress: any) {
+export async function savePuzzleProgress(
+  date: string,
+  puzzleData: any,
+  progress: any,
+  meta?: { completionTime?: number; hintsUsed?: number; hasStarted?: boolean }
+) {
   const db = await initDB();
+  const existing = await db.get('puzzles', date);
   await db.put('puzzles', {
     date,
     puzzleData,
     progress,
-    completed: false,
+    completed: existing?.completed || false,
+    completionTime: meta?.completionTime ?? existing?.completionTime,
+    hintsUsed: meta?.hintsUsed ?? existing?.hintsUsed,
+    hasStarted: meta?.hasStarted ?? existing?.hasStarted,
     updatedAt: Date.now(),
   });
 }
@@ -190,6 +213,21 @@ export async function saveActivity(date: string, completed: boolean, score: numb
   });
 }
 
+export async function upsertActivityFromSync(date: string, completed: boolean, score: number, difficulty: string) {
+  const db = await initDB();
+  const existing = await db.get('activity', date);
+
+  if (!existing || score >= existing.score) {
+    await db.put('activity', {
+      date,
+      completed,
+      score,
+      difficulty,
+      synced: true,
+    });
+  }
+}
+
 export async function getActivity(date: string) {
   const db = await initDB();
   return await db.get('activity', date);
@@ -204,6 +242,21 @@ export async function getActivityRange(startDate: string, endDate: string) {
   const db = await initDB();
   const allActivity = await db.getAll('activity');
   return allActivity.filter(a => a.date >= startDate && a.date <= endDate);
+}
+
+export async function getUnsyncedActivity() {
+  const db = await initDB();
+  const allActivity = await db.getAll('activity');
+  return allActivity.filter(item => !item.synced);
+}
+
+export async function markActivitySynced(date: string) {
+  const db = await initDB();
+  const activity = await db.get('activity', date);
+  if (activity) {
+    activity.synced = true;
+    await db.put('activity', activity);
+  }
 }
 
 // Streak Management
@@ -250,12 +303,39 @@ export async function getUser() {
   return await db.get('user', 'profile');
 }
 
+// Achievement management
+export async function saveAchievement(key: string, metadata?: Record<string, unknown>) {
+  const db = await initDB();
+  const existing = await db.get('achievements', key);
+  if (!existing) {
+    await db.put('achievements', {
+      key,
+      unlockedAt: Date.now(),
+      metadata,
+    });
+    return true;
+  }
+  return false;
+}
+
+export async function getAchievements() {
+  const db = await initDB();
+  return await db.getAll('achievements');
+}
+
+export async function hasAchievement(key: string) {
+  const db = await initDB();
+  const achievement = await db.get('achievements', key);
+  return !!achievement;
+}
+
 // Clear all data (for logout)
 export async function clearAllData() {
   const db = await initDB();
   await db.clear('puzzles');
   await db.clear('scores');
   await db.clear('activity');
+  await db.clear('achievements');
   await db.clear('streak');
   await db.clear('user');
 }

@@ -3,15 +3,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isScoreValid } from '@/lib/puzzleValidator';
 
+export const dynamic = 'force-dynamic';
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDateString(date: string): boolean {
+  if (!DATE_REGEX.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(date);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, date, score, completionTime, hintsUsed, puzzleType, difficulty } = body;
+    const { userId, date, score, completionTime, hintsUsed, puzzleType } = body;
+    const difficulty = ['easy', 'medium', 'hard'].includes(body?.difficulty)
+      ? body.difficulty
+      : 'medium';
 
     // Validation
-    if (!userId || !date || score === undefined || !completionTime || !puzzleType) {
+    if (!userId || !date || score === undefined || completionTime === undefined || !puzzleType) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidDateString(date)) {
+      return NextResponse.json(
+        { error: 'Invalid date format. Expected YYYY-MM-DD' },
         { status: 400 }
       );
     }
@@ -25,6 +45,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (completionTime < 5 || completionTime > 7200) {
+      return NextResponse.json(
+        { error: 'Unrealistic completion time' },
+        { status: 400 }
+      );
+    }
+
+    if (score < 10 || score > 1000) {
+      return NextResponse.json(
+        { error: 'Invalid score range' },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Invalid user' },
+        { status: 404 }
+      );
+    }
+
     // Validate score authenticity
     if (!isScoreValid(score, completionTime, hintsUsed || 0, difficulty || 'medium')) {
       return NextResponse.json(
@@ -33,23 +75,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upsert score (prevent duplicates)
-    const dailyScore = await prisma.dailyScore.upsert({
+    const existing = await prisma.dailyScore.findUnique({
       where: {
         userId_date: {
           userId,
           date,
         },
       },
-      update: {
-        score,
-        completionTime,
-        hintsUsed: hintsUsed || 0,
-      },
-      create: {
+    });
+
+    if (existing) {
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        data: existing,
+      });
+    }
+
+    const dailyScore = await prisma.dailyScore.create({
+      data: {
         userId,
         date,
         puzzleType,
+        difficulty,
         score,
         completionTime,
         hintsUsed: hintsUsed || 0,

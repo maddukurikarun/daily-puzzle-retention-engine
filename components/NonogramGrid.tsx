@@ -54,8 +54,8 @@ export default function NonogramGrid({ grid, solution, onCellChange, disabled }:
   };
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="bg-white p-4 rounded-lg shadow-lg">
+    <div className="flex flex-col items-center w-full">
+      <div className="bg-white p-2 sm:p-4 rounded-lg shadow-lg overflow-x-auto">
         <div className="flex">
           {/* Empty corner */}
           <div className="w-16" />
@@ -93,7 +93,7 @@ export default function NonogramGrid({ grid, solution, onCellChange, disabled }:
                     onClick={() => handleCellClick(rowIndex, colIndex)}
                     disabled={disabled}
                     className={`
-                      w-10 h-10 border border-gray-300 transition-colors
+                      w-8 h-8 sm:w-10 sm:h-10 border border-gray-300 transition-colors
                       ${cell.revealed && cell.value === 1 ? 'bg-blue-600' : 'bg-white'}
                       ${!disabled ? 'hover:bg-gray-100 cursor-pointer' : ''}
                     `}

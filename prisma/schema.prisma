@@ -28,6 +28,7 @@ model DailyScore {
   userId          String
   date            String   // Format: YYYY-MM-DD
   puzzleType      String
+  difficulty      String
   score           Int
   completionTime  Int      // in seconds
   hintsUsed       Int      @default(0)
